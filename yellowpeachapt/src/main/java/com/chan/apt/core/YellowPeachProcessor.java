@@ -20,8 +20,17 @@ import javax.lang.model.element.VariableElement;
 
 @AutoService(Processor.class)
 public class YellowPeachProcessor extends AbstractProcessor {
+    /**
+     * 用于写java文件
+     */
     private Filer mFiler;
+    /**
+     * 可以理解为log
+     */
     private Messager mMessager;
+    /**
+     * 注解检查器，用于判断被注解的field不是private的
+     */
     private AnnotationChecker mAnnotationChecker;
 
     @Override
@@ -30,23 +39,27 @@ public class YellowPeachProcessor extends AbstractProcessor {
 
         mFiler = processingEnv.getFiler();
         mMessager = processingEnv.getMessager();
-
         mAnnotationChecker = new AnnotationChecker(mMessager);
     }
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
 
+        //找到被注解的field
         Set<? extends Element> set = roundEnv.getElementsAnnotatedWith(JoinView.class);
+
         if (set != null) {
 
             CodeGenerator codeGenerator = new CodeGenerator(mFiler, mMessager);
             for (Element element : set) {
+                //先检查权限
                 if (!mAnnotationChecker.checkAnnotation(element)) {
                     return false;
                 }
+                //把备注解的field添加到生成器里，准备用来生成代码
                 codeGenerator.add((VariableElement) element);
             }
+            //开始生成代码
             codeGenerator.generate();
         }
         return true;
@@ -54,6 +67,8 @@ public class YellowPeachProcessor extends AbstractProcessor {
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
+
+        //添加支持的注解类型 我们支持JoinView
         Set<String> set = new HashSet<>();
         set.add(JoinView.class.getCanonicalName());
         return set;

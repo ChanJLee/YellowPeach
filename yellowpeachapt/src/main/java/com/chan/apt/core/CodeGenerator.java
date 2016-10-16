@@ -12,6 +12,7 @@ import javax.annotation.processing.Filer;
 import javax.annotation.processing.Messager;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.VariableElement;
+import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 
 /**
@@ -20,25 +21,19 @@ import javax.tools.JavaFileObject;
  */
 public class CodeGenerator {
     private Map<String, List<VariableElement>> mVariableElementMap = new HashMap<>();
+    /**
+     * 用于写java文件
+     */
     private Filer mFiler;
+    /**
+     * logger
+     */
     private Messager mMessager;
 
     /**
-     * 包名 + 类名
+     * APT生成代码所在的包名
      */
-    private List<String> mName = new ArrayList<>();
-
-    /**
-     * 生成的class名
-     */
-    private List<String> mClazzNames = new ArrayList<>();
-
     private String mPackage;
-
-    /**
-     * 外部的类名
-     */
-    private List<String> mEnclosingName = new ArrayList<>();
 
     public CodeGenerator(Filer filer, Messager messager) {
         mFiler = filer;
@@ -49,8 +44,11 @@ public class CodeGenerator {
         List<VariableElement> variableElements = mVariableElementMap.get(element.getEnclosingElement().toString());
         if (variableElements == null) {
             variableElements = new ArrayList<>();
+            //获得被注解的class的名称作为键
             mVariableElementMap.put(element.getEnclosingElement().toString(), variableElements);
         }
+
+        //当前class下备注解的field
         variableElements.add(element);
     }
 
@@ -64,8 +62,13 @@ public class CodeGenerator {
 
         try {
             for (Map.Entry<String, List<VariableElement>> entry : mVariableElementMap.entrySet()) {
+                //把.都换成$
                 String clazzName = "YellowPeach$" + entry.getKey().replaceAll("\\.", "\\$");
+                //指定java文件写入的位置
                 JavaFileObject javaFileObject = mFiler.createSourceFile(mPackage + "." + clazzName);
+                mMessager.printMessage(Diagnostic.Kind.NOTE, "在" + mPackage + "." + clazzName + "生成代码");
+
+                //开始写文件
                 Writer writer = javaFileObject.openWriter();
                 writer.write(generateSourceCode(entry, mPackage, clazzName));
                 writer.flush();
@@ -77,6 +80,8 @@ public class CodeGenerator {
     }
 
     private void init() {
+
+        //先获得包名
         Iterator<Map.Entry<String, List<VariableElement>>> iterator = mVariableElementMap.entrySet().iterator();
         Map.Entry<String, List<VariableElement>> elementEntry = iterator.next();
 
@@ -89,14 +94,6 @@ public class CodeGenerator {
         }
 
         mPackage = mPackage.substring(0, mPackage.lastIndexOf("."));
-
-        iterator = mVariableElementMap.entrySet().iterator();
-        while (iterator.hasNext()) {
-            elementEntry = iterator.next();
-            String clazzName = "YellowPeach$" + elementEntry.getKey().replaceAll("\\.", "\\$");
-            mClazzNames.add(clazzName);
-            mName.add(mPackage + "." + clazzName);
-        }
     }
 
     private static String generateSourceCode(Map.Entry<String, List<VariableElement>> entry, String packageName, String clazzName) {
@@ -121,7 +118,7 @@ public class CodeGenerator {
         //成员变量
         stringBuilder.append("private List<View> mViews = new ArrayList<>();\n");
 
-        //构造函数
+        //构造函数 参数为被注解的class
         stringBuilder.append("public ");
         stringBuilder.append(clazzName);
         stringBuilder.append("(");
@@ -131,6 +128,7 @@ public class CodeGenerator {
         for (VariableElement item : entry.getValue()) {
             stringBuilder.append("mViews.add(");
             stringBuilder.append("o.");
+            //返回field的名字
             stringBuilder.append(item.getSimpleName());
             stringBuilder.append(");");
         }
